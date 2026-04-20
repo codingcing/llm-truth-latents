@@ -1,6 +1,6 @@
 # Truth and Falsity in LLM's
 
-Recent publications have successfully extracted cogent 'personas' from large language models, that is certain components of activation space corresponding to traits in the responses of these models.
+Recent publications have successfully extracted cogent 'personas' from large language models, that is, certain components of activation space corresponding to traits in the responses of these models.
 
 <div align="center">
 
