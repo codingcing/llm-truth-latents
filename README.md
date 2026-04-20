@@ -22,6 +22,7 @@ In this repo, I investigate the following questions:
 More broadly, the hypothesis I want to invesigate is that there exists a subspace of LLM activation space corresponding to a higher density of truthful model responses. 
 
 By **truthful**, I mean either an answer which is factually correct, in a case where an LLM *could* ascertain the correct answer, or an abstension in the case where a correct answer either does not exist or is not knowable to the LLM. A **false** response is any response which is *not* truthful.
+
 ---
 
 ## Repository Structure
