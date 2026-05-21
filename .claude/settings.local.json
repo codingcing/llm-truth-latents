@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mv /Users/adeolugboji/Desktop/llm-truth-latents /Users/adeolugboji/Desktop/abstention-geometry)",
+      "Bash(git -C /Users/adeolugboji/Desktop/abstention-geometry remote set-url origin https://github.com/codingcing/abstention-geometry.git)",
+      "Read(//Users/adeolugboji/Desktop/**)",
+      "Bash(git -C /Users/adeolugboji/Desktop/abstention-geometry remote -v)",
+      "Bash(git -C /Users/adeolugboji/Desktop/abstention-geometry status -sb)",
+      "Bash(python -c \"import json; nb=json.load\\(open\\('notebooks/02_probe_analysis.ipynb'\\)\\); [print\\('---',c['cell_type'],'---\\\\n',''.join\\(c['source']\\)\\) for c in nb['cells']]\")",
+      "Bash(python -c \"import json; d=json.load\\(open\\('data/selfaware/SelfAware.json'\\)\\); print\\('keys:',list\\(d.keys\\(\\)\\)\\); print\\('n=',len\\(d['example']\\)\\); print\\('sample:',list\\(d['example'][0].keys\\(\\)\\)\\)\")",
+      "Read(//Users/adeolugboji/Library/CloudStorage/**)",
+      "Read(//Users/adeolugboji/Library/CloudStorage/GoogleDrive-a.olugboji7@gmail.com/**)",
+      "Bash(python -c ' *)",
+      "Bash(python -c \"import json; nb=json.load\\(open\\('notebooks/04_data_topics.ipynb'\\)\\); print\\('valid notebook,', len\\(nb['cells']\\), 'cells'\\)\")"
+    ]
+  }
+}

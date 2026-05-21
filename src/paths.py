@@ -41,7 +41,14 @@ def results_dir() -> str:
                 "Google Drive is not mounted. Run this first:\n"
                 "  from google.colab import drive; drive.mount('/content/drive')"
             )
-        path = Path(_COLAB_RESULTS)
+        # If the notebook is run from inside the Drive-synced repo, keep results
+        # next to the repo so they sync straight back to your machine — works no
+        # matter where under My Drive the folder lives. Otherwise (repo cloned to
+        # ephemeral /content) fall back to the fixed Drive path.
+        if str(_REPO_ROOT).startswith("/content/drive"):
+            path = _REPO_ROOT / "results"
+        else:
+            path = Path(_COLAB_RESULTS)
     else:
         path = _REPO_ROOT / "results"
 
