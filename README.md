@@ -1,40 +1,58 @@
-# Truth and Falsity in LLM's
+# Abstention Geometry: Probing the Residual Stream for Calibrated Uncertainty
 
-Recent publications have successfully extracted cogent 'personas' from large language models, that is, certain components of activation space corresponding to traits in the responses of these models. The models of interest are Gemma 2 9B, Llama 3.2 8B and Qwen 2.5 7B.
+We investigate whether **Llama 3.1 8B Instruct** internally distinguishes prompts it can
+answer from prompts it should hedge or refuse — i.e., whether there is a linear subspace
+of the residual stream encoding *calibrated abstention*. This is a study of the model's
+own knows / doesn't-know signal on the SelfAware dataset. I was inspired by recent work on
+the Assistant Axis, which describes the structure of the vector space within which
+LLM activations live, and uses it to make predictions about the *persona* it will inhabit.
 
-<div align="center">
+<p align="center">
+  <img src="assets/persona_axes.png" alt="Persona axes" width="600">
+</p>
 
-[![Persona Axes][persona-axes-img]][persona-axes-src]
+## Research questions
 
-[persona-axes-img]: assets/persona_axes.png
-[persona-axes-src]: <https://arxiv.org/abs/2601.10387>
+1. Is there a linear direction in the residual stream that separates answerable from
+   unanswerable prompts (as defined by SelfAware)?
+2. At which layer is this direction most clearly identifiable?
+3. Does the direction generalise across question topics, or is it topic-specific?
 
-</div>
+## Repo structure
 
-In this repository, I investigate the following questions:
+```
+.
+├── data/selfaware/             SelfAware.json (drop in manually; gitignored)
+├── notebooks/
+│   ├── 00_setup.ipynb          env checks, HF login, GPU verification
+│   ├── 01_cache_activations.ipynb   forward passes, cache resid_post per layer
+│   ├── 02_probe_analysis.ipynb      probes + headline figure
+│   └── 03_generalization.ipynb      cross-topic eval
+├── src/
+│   ├── data.py                 dataset loading + prompt templating
+│   ├── model.py                model load, generation, activation caching
+│   ├── judge.py                LLM-as-judge label pipeline
+│   ├── probes.py               diff-of-means, logistic probes, PCA
+│   └── generalization.py       cross-topic holdouts
+├── results/                    activations, labels (gitignored)
+└── figures/                    plots (gitignored)
+```
 
-1) What conception, if any, do language models have of truth and falsity?
+## Setup
 
-2) Do certain subspaces of persona space correspond to higher and lower propensity for truth-telling? 
+1. `pip install -r requirements.txt`
+2. `huggingface-cli login` (needed for gated Llama weights)
+3. Download SelfAware.json from the SelfAware repo and place it at
+   `data/selfaware/SelfAware.json`.
 
-3) What is the *degree* (e.g. model layer) at which we can clearly identify the concept of truthfulness?
+## Colab Pro+ workflow
 
-More broadly, the hypothesis I want to invesigate is that there exists a subspace of LLM activation space corresponding to a higher density of truthful model responses. 
+1. `!git clone <repo-url>` in the runtime, then `cd` into it.
+2. Mount Drive: `from google.colab import drive; drive.mount('/content/drive')`.
+3. Point `RESULTS_DIR` at a Drive path so cached activations survive runtime restarts.
+   The full 32-layer cache for 3.7k prompts is ~14GB in bf16.
+4. Use an A100 runtime for activation caching and generation; CPU is fine for the probe
+   analysis once activations are cached.
 
-By **truthful**, I mean either an answer which is factually correct, in a case where an LLM *could* ascertain the correct answer, or an abstension in the case where a correct answer either does not exist or is not knowable to the LLM. A **false** response is any response which is *not* truthful.
-
----
-
-## Repository Structure
-
-**/assets** — figures, images, and other static files referenced in the README or notebooks.
-
-**/data** — datasets of answerable and unanswerable questions, raw model responses, and LLM-judge labels.
-
-**/models** — model configs and any downloaded open-weights checkpoints used for analysis.
-
-**/notebooks** — exploratory Jupyter notebooks for dataset inspection, activation visualisation, and hypothesis testing.
-
-**/src** — source code: dataset generation, inference pipelines, LLM-as-judge, and vector extraction utilities.
-
-**/results** — saved activation vectors, PCA/SAE outputs, K-means fits, and plots produced by the analysis pipeline.
+Large artifacts (`results/*.pt`, `results/*.csv`, `figures/*`) are gitignored. Treat
+Drive as the source of truth for cached outputs; only code and the README live in git.

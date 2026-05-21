@@ -1,0 +1,12 @@
+results/*.pt
+results/*.csv
+results/*.json
+figures/*.png
+figures/*.pdf
+data/selfaware/SelfAware.json
+__pycache__/
+.ipynb_checkpoints/
+*.egg-info/
+.env
+*.pyc
+.DS_Store
