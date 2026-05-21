@@ -65,7 +65,11 @@ def train_logistic_probes(
     """Train a cross-validated logistic probe at each layer.
 
     C=0.1 (moderate L2) keeps probes from memorising in high dimensions, where
-    N (~3.7k) is comparable to d_model (4096).
+    N (~3.4k) is comparable to d_model (4096).
+
+    Scored with balanced accuracy because SelfAware is ~69/31 answerable/unanswerable:
+    plain accuracy gives a misleading 0.69 majority-class baseline, whereas balanced
+    accuracy has a clean 0.5 chance level regardless of class skew.
 
     Args:
         acts_by_layer: Output of load_activations.
@@ -73,17 +77,18 @@ def train_logistic_probes(
         cv_folds: Number of CV folds.
 
     Returns:
-        DataFrame with columns [layer, mean_accuracy, std_accuracy], sorted by layer.
+        DataFrame with columns [layer, mean_balanced_accuracy, std_balanced_accuracy],
+        sorted by layer.
     """
     rows = []
     for layer in sorted(acts_by_layer.keys()):
         X = acts_by_layer[layer]
         clf = LogisticRegression(C=0.1, max_iter=1000)
-        scores = cross_val_score(clf, X, labels, cv=cv_folds, scoring="accuracy")
+        scores = cross_val_score(clf, X, labels, cv=cv_folds, scoring="balanced_accuracy")
         rows.append({
             "layer": layer,
-            "mean_accuracy": float(scores.mean()),
-            "std_accuracy": float(scores.std()),
+            "mean_balanced_accuracy": float(scores.mean()),
+            "std_balanced_accuracy": float(scores.std()),
         })
     return pd.DataFrame(rows)
 
@@ -116,7 +121,7 @@ def plot_probe_accuracy(
     results_df: pd.DataFrame,
     save_path: str = "figures/probe_accuracy_by_layer.png",
 ) -> None:
-    """Headline figure: cross-validated probe accuracy vs layer.
+    """Headline figure: cross-validated balanced probe accuracy vs layer.
 
     Args:
         results_df: Output of train_logistic_probes.
@@ -124,16 +129,16 @@ def plot_probe_accuracy(
     """
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     fig, ax = plt.subplots(figsize=(7, 4))
-    ax.plot(results_df["layer"], results_df["mean_accuracy"], marker="o")
+    ax.plot(results_df["layer"], results_df["mean_balanced_accuracy"], marker="o")
     ax.fill_between(
         results_df["layer"],
-        results_df["mean_accuracy"] - results_df["std_accuracy"],
-        results_df["mean_accuracy"] + results_df["std_accuracy"],
+        results_df["mean_balanced_accuracy"] - results_df["std_balanced_accuracy"],
+        results_df["mean_balanced_accuracy"] + results_df["std_balanced_accuracy"],
         alpha=0.2,
     )
-    ax.axhline(0.5, linestyle="--", color="gray", label="chance")
+    ax.axhline(0.5, linestyle="--", color="gray", label="chance (balanced)")
     ax.set_xlabel("Layer")
-    ax.set_ylabel("Probe accuracy (5-fold CV)")
+    ax.set_ylabel("Balanced accuracy (5-fold CV)")
     ax.set_title("Abstention probe accuracy by layer")
     ax.legend()
     fig.tight_layout()
