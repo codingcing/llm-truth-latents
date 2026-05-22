@@ -10,7 +10,7 @@ from transformer_lens import HookedTransformer
 
 
 def load_model(
-    model_name: str = "meta-llama/Meta-Llama-3.1-8B-Instruct",
+    model_name: str = "meta-llama/Llama-3.1-8B-Instruct",
 ) -> HookedTransformer:
     """Load a HookedTransformer in bfloat16 on the best available device.
 
