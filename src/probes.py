@@ -93,6 +93,48 @@ def train_logistic_probes(
     return pd.DataFrame(rows)
 
 
+def train_conditional_probe(
+    acts_by_layer: dict[int, np.ndarray],
+    behaviour: np.ndarray,
+    mask: np.ndarray,
+    cv_folds: int = 5,
+) -> pd.DataFrame:
+    """Train a per-layer logistic probe on a restricted subset of examples.
+
+    For the dissociation analysis: pass `mask` selecting only the unanswerable
+    questions and `behaviour` = whether the model answered. This holds
+    answerability fixed and asks how decodable the *behavioural* decision is on
+    its own — directly comparable to the full answerability sweep from
+    train_logistic_probes, but a strictly harder, conditional task.
+
+    Same probe as train_logistic_probes (C=0.1, balanced accuracy, 5-fold CV).
+
+    Args:
+        acts_by_layer: Output of load_activations.
+        behaviour: (N,) binary labels over the full dataset.
+        mask: (N,) boolean; only these rows are used for training/eval.
+        cv_folds: Number of CV folds.
+
+    Returns:
+        DataFrame [layer, mean_balanced_accuracy, std_balanced_accuracy, n_samples],
+        sorted by layer. n_samples is the subset size (constant across layers).
+    """
+    idx = np.asarray(mask, dtype=bool)
+    y = np.asarray(behaviour)[idx]
+    rows = []
+    for layer in sorted(acts_by_layer.keys()):
+        X = acts_by_layer[layer][idx]
+        clf = LogisticRegression(C=0.1, max_iter=1000)
+        scores = cross_val_score(clf, X, y, cv=cv_folds, scoring="balanced_accuracy")
+        rows.append({
+            "layer": layer,
+            "mean_balanced_accuracy": float(scores.mean()),
+            "std_balanced_accuracy": float(scores.std()),
+            "n_samples": int(idx.sum()),
+        })
+    return pd.DataFrame(rows)
+
+
 def pca_analysis(
     acts: np.ndarray,
     labels: np.ndarray,
@@ -120,12 +162,14 @@ def pca_analysis(
 def plot_probe_accuracy(
     results_df: pd.DataFrame,
     save_path: str = "figures/probe_accuracy_by_layer.png",
+    title: str = "Abstention probe accuracy by layer",
 ) -> None:
     """Headline figure: cross-validated balanced probe accuracy vs layer.
 
     Args:
         results_df: Output of train_logistic_probes.
         save_path: Output PNG path.
+        title: Plot title — set per probe target when sweeping more than one.
     """
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     fig, ax = plt.subplots(figsize=(7, 4))
@@ -139,7 +183,7 @@ def plot_probe_accuracy(
     ax.axhline(0.5, linestyle="--", color="gray", label="chance (balanced)")
     ax.set_xlabel("Layer")
     ax.set_ylabel("Balanced accuracy (5-fold CV)")
-    ax.set_title("Abstention probe accuracy by layer")
+    ax.set_title(title)
     ax.legend()
     fig.tight_layout()
     fig.savefig(save_path, dpi=150)

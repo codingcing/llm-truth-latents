@@ -10,3 +10,10 @@ __pycache__/
 .env
 *.pyc
 .DS_Store
+
+# Google Drive Desktop sync staging — transient binary blobs, not source.
+.tmp.driveupload/
+.tmp.drivedownload/
+
+# Local Claude Code session state.
+.claude/

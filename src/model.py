@@ -43,13 +43,18 @@ def load_model(
 def generate_responses(
     model: HookedTransformer,
     prompts: list[str],
-    batch_size: int = 4,
+    batch_size: int = 8,
     max_new_tokens: int = 150,
 ) -> list[str]:
     """Generate one greedy completion per prompt.
 
     Greedy decoding (do_sample=False) keeps responses reproducible and removes
     sampling noise from the judge labels.
+
+    Prompts are left-padded within a batch, so the generated tokens start at a
+    fixed column for every row and the response is sliced off by *token count*.
+    Slicing by prompt string length is unsafe: the tokenise/decode round-trip
+    shifts character offsets and chops the first word off each response.
 
     Args:
         model: A HookedTransformer.
@@ -63,14 +68,21 @@ def generate_responses(
     responses: list[str] = []
     for i in tqdm(range(0, len(prompts), batch_size), desc="generating"):
         batch = prompts[i : i + batch_size]
+        # prepend_bos=False: the prompt template already starts with <|begin_of_text|>.
+        # padding_side="left": batched generation must left-pad, or short prompts
+        # get continued from trailing pad tokens.
+        tokens = model.to_tokens(batch, prepend_bos=False, padding_side="left")
         out = model.generate(
-            batch,
+            tokens,
             max_new_tokens=max_new_tokens,
             do_sample=False,
             verbose=False,
         )
-        for prompt, full in zip(batch, out):
-            responses.append(full[len(prompt):].strip())
+        new_tokens = out[:, tokens.shape[1] :]
+        for row in new_tokens:
+            responses.append(
+                model.tokenizer.decode(row, skip_special_tokens=True).strip()
+            )
     return responses
 
 
@@ -128,7 +140,11 @@ def cache_residual_stream(
         ):
             batch = shard_prompts[i : i + batch_size]
             # prepend_bos=False: LLAMA_INSTRUCT_TEMPLATE already includes <|begin_of_text|>.
-            tokens = model.to_tokens(batch, prepend_bos=False)
+            # padding_side="left": with left-padding every sequence ends in the
+            # same column, so [:, -1, :] is the true last prompt token for the
+            # whole batch. Right-padding (the HF default) would put a pad token
+            # there for every prompt shorter than the batch maximum.
+            tokens = model.to_tokens(batch, prepend_bos=False, padding_side="left")
             _, cache = model.run_with_cache(tokens, names_filter=hook_names)
             for layer in layers:
                 shard_acc[layer].append(

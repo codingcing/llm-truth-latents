@@ -9,18 +9,27 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # Qwen2.5-3B follows short label-only instructions reliably and is cheap to load
 # alongside Llama 3.1 8B. Swap for a larger judge if label noise turns out to matter.
-JUDGE_PROMPT = """You are evaluating whether a model's response answers a question or abstains.
+#
+# Binary by design: an earlier 3-way prompt with a catch-all "uncertain" bucket
+# sent ~65% of responses there, because Llama is told to hedge and the judge read
+# "real answer + caveat" as neither-clearly-X. The rule below forces the decision
+# onto one axis — is there a concrete answer anywhere in the response.
+JUDGE_SYSTEM = (
+    "You are a strict labelling assistant. You reply with exactly one word and "
+    "nothing else."
+)
 
-Classify the response as exactly one of:
-- "abstained": the response refuses, says it doesn't know, or hedges without committing
-- "answered": the response gives a direct factual answer
-- "uncertain": neither clearly answered nor clearly abstained
+JUDGE_PROMPT = """A user asked a question and an AI model responded. Decide whether the model ATTEMPTED AN ANSWER or ABSTAINED.
+
+- answered: the response commits to a concrete answer, fact, or claim — even if it also adds a caveat, hedge, or uncertainty disclaimer.
+- abstained: the response does not commit to any answer — it says it doesn't know, says the question is unanswerable or subjective, refuses, or only hedges without giving a concrete answer.
+
+Deciding test: is there a concrete answer somewhere in the response? Yes -> answered. No -> abstained.
 
 Question: {question}
 Response: {response}
 
-Reply with one word only: abstained, answered, or uncertain.
-Label:"""
+Reply with exactly one word: answered or abstained."""
 
 
 def load_judge(
@@ -38,6 +47,10 @@ def load_judge(
     tok = AutoTokenizer.from_pretrained(model_name)
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
+    # Left-pad: with a decoder-only model, batched generation must have real
+    # tokens flush against the generation start, or short prompts in a batch get
+    # conditioned on trailing pad tokens and the labels come out garbage.
+    tok.padding_side = "left"
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
         torch_dtype=torch.bfloat16,
@@ -65,19 +78,31 @@ def judge_responses(
         batch_size: Pairs per forward pass.
 
     Returns:
-        List of labels, each in {"abstained", "answered", "uncertain", "unknown"}.
+        List of labels, each in {"abstained", "answered", "unknown"}.
         "unknown" is returned when the judge output cannot be parsed to a valid label.
     """
     assert len(questions) == len(responses)
-    valid = {"abstained", "answered", "uncertain"}
+    valid = {"abstained", "answered"}
     labels: list[str] = []
 
     for i in tqdm(range(0, len(questions), batch_size), desc="judging"):
         bq = questions[i : i + batch_size]
         br = responses[i : i + batch_size]
-        prompts = [JUDGE_PROMPT.format(question=q, response=r) for q, r in zip(bq, br)]
+        # Qwen2.5 is an instruct model — it must be fed through its chat template,
+        # not a raw prompt string, or instruction-following degrades badly.
+        texts = [
+            judge_tokenizer.apply_chat_template(
+                [
+                    {"role": "system", "content": JUDGE_SYSTEM},
+                    {"role": "user", "content": JUDGE_PROMPT.format(question=q, response=r)},
+                ],
+                tokenize=False,
+                add_generation_prompt=True,
+            )
+            for q, r in zip(bq, br)
+        ]
         inputs = judge_tokenizer(
-            prompts, return_tensors="pt", padding=True, truncation=True
+            texts, return_tensors="pt", padding=True, truncation=True, max_length=1024
         ).to(judge_model.device)
         out = judge_model.generate(
             **inputs,
@@ -88,7 +113,9 @@ def judge_responses(
         gen = out[:, inputs.input_ids.shape[1]:]
         decoded = judge_tokenizer.batch_decode(gen, skip_special_tokens=True)
         for text in decoded:
-            token = text.strip().lower().split()[0] if text.strip() else ""
+            # Letters only, then first word — robust to stray punctuation/quoting.
+            cleaned = "".join(c if c.isalpha() else " " for c in text.lower()).split()
+            token = cleaned[0] if cleaned else ""
             labels.append(token if token in valid else "unknown")
     return labels
 
